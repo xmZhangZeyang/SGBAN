@@ -428,7 +428,7 @@ class Network:
     def save(self, ver_str=None):
         print("Saving!")
         if ver_str:
-            file = open(self.save_path + ver_str, 'w', encoding='utf-8')
+            file = open(self.save_path[:-5] + "_" + ver_str + self.save_path[-5:], 'w', encoding='utf-8')
         else:
             file = open(self.save_path, 'w', encoding='utf-8')
         json_layers = []
