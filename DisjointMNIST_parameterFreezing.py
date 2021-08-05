@@ -65,7 +65,7 @@ while len(net.out_memory_data) > 0:
     i += 1
     if l_num < len(net.architecture) - 1:
         l_num += 1
-        for i in range(3):
+        for j in range(3):
             net.try_fine_tuning(loop=10000)
     print("task 2 accuracy:")
     net.test(test_set_2, test_set_labels_2, softmax=True, label_shift=[5, 10])
