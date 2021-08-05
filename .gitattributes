@@ -1,3 +1,5 @@
 *.npz filter=lfs diff=lfs merge=lfs -text
 *.json filter=lfs diff=lfs merge=lfs -text
 D:/Programming/Python/GitHub_SGBAN/SGBAN/Model/save_disjointMNIST.json filter=lfs diff=lfs merge=lfs -text
+D:/Programming/Python/GitHub_SGBAN/SGBAN/DisjointMNIST/mnist0to4.npz filter=lfs diff=lfs merge=lfs -text
+D:/Programming/Python/GitHub_SGBAN/SGBAN/DisjointMNIST/mnist5to9.npz filter=lfs diff=lfs merge=lfs -text
