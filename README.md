@@ -3,7 +3,9 @@
 ## Self-Growing Binary-Activation Network (SGBAN)
 
 This is a Tensorflow implementation of SGBAN described in the following papers:
-《Self-Growing Binary-Activation Network: a Novel Deep Learning Model with Dynamic Architecture》
+《Self-Growing Binary-Activation Network: a Novel Deep Learning Model with Dynamic Architecture》. 
+
+This article is available at https://doi.org/10.1109/TNNLS.2022.3176027.
 
 ## Requirements
 The current version of the code has been tested with:
