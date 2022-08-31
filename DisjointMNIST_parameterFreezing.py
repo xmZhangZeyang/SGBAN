@@ -27,7 +27,7 @@ for i in range(0, len(net.architecture) - 2):
     for j in range(5):
         net.add_cell(i)
         m = 0
-        for ci in net.layers[i + 1].cells:
+        for ci in net.layers[i + 1].neurons:
             if m < net.mask[i + 1]:
                 ci.k = ci.k + [[0]]
             else:

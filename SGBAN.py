@@ -3,7 +3,8 @@ import json
 import TensorflowNet as Tn
 
 
-class Cell:
+# basic unit of network
+class Neuron:
     def __init__(self, pd):
         self.k = np.random.normal(0, 0.001, [pd, 1]).tolist()
         self.b = np.random.normal(0, 0.001)
@@ -21,26 +22,26 @@ class Cell:
 
 
 class Layer:
-    def __init__(self, layer_number, pattern_dimension, cell_number=0):
+    def __init__(self, layer_number, pattern_dimension, neuron_num=0):
         self.ln = layer_number
         self.pd = pattern_dimension
-        self.cells = []
-        if cell_number != 0:
-            for ci in range(cell_number):
-                self.add_cell()
+        self.neurons = []
+        if neuron_num != 0:
+            for ci in range(neuron_num):
+                self.add_neuron()
 
-    def add_cell(self):
-        self.cells.append(Cell(self.pd))
+    def add_neuron(self):
+        self.neurons.append(Neuron(self.pd))
 
     def get_kb(self):
-        k = np.array(self.cells[0].k)
-        b = np.array(self.cells[0].b)
+        k = np.array(self.neurons[0].k)
+        b = np.array(self.neurons[0].b)
         if k is None or b is None:
             return None, None
-        for i in range(len(self.cells)):
+        for i in range(len(self.neurons)):
             if i > 0:
-                ki = np.array(self.cells[i].k)
-                bi = np.array(self.cells[i].b)
+                ki = np.array(self.neurons[i].k)
+                bi = np.array(self.neurons[i].b)
                 if ki is None or bi is None:
                     return None, None
                 k = np.append(k, ki, axis=1)
@@ -49,29 +50,25 @@ class Layer:
 
     def set_kb(self, k, b):
         k = np.array(k)
-        for i in range(len(self.cells)):
+        for i in range(len(self.neurons)):
             ki = k[:, i:i+1]
-            self.cells[i].set_kb(ki, b[i])
+            self.neurons[i].set_kb(ki, b[i])
 
 
+# Self-Growing Binary-Activation Network
 class Network:
     def __init__(self, input_dimension, output_dimension, save_path):
         self.save_path = save_path
-        self.layers = [Layer(0, pattern_dimension=input_dimension, cell_number=output_dimension)]
+        self.layers = [Layer(0, pattern_dimension=input_dimension, neuron_num=output_dimension)]
         self.layercount = 1
         self.architecture = [input_dimension, output_dimension]
         self.mask = None
         self.loop = 1000
-        self.debug_trained_number = 0
-        self.debug_add_cell_time = []
-        self.debug_test_acc = []
         self.in_memory_data = []
         self.out_memory_data = []
         self.in_memory_labels = []
         self.out_memory_labels = []
         self.shift = 0
-        self.debug_origin_k = []
-        self.debug_origin_b = []
 
     def add_layer(self):
         print("Add layer")
@@ -89,19 +86,17 @@ class Network:
 
     def add_cell(self, ln):
         print("Add Cell at layer", ln)
-        self.layers[ln].add_cell()
+        self.layers[ln].add_neuron()
         if ln < len(self.architecture) - 2:
             self.layers[ln+1].pd += 1
         self.architecture[ln+1] += 1
-        self.debug_add_cell_time.append([len(self.in_memory_labels), ln])
 
     def one_pass(self, ln):
         print("One-pass: Add Cell at layer", ln)
         _k, _b = self.layers[ln].get_kb()
-        self.layers[ln].add_cell()
+        self.layers[ln].add_neuron()
         self.layers[ln + 1].pd += 1
         self.architecture[ln + 1] += 1
-        self.debug_add_cell_time.append([len(self.in_memory_labels), ln])
         w = np.array(_k)
         w = np.concatenate([w, np.zeros([1, w.shape[1]])], axis=0)
         new = np.zeros([w.shape[0], 1])
@@ -166,8 +161,6 @@ class Network:
         else:
             test_append_list, test_del_list = Tn.test(self.architecture, ws, bs, data, labels,
                                                       softmax=softmax, label_shift=label_shift)
-            if save:
-                self.debug_test_acc.append([len(self.in_memory_labels), len(test_append_list) / len(data)])
             return test_append_list, test_del_list
 
     def forwarding(self, data, soft=False):
@@ -232,9 +225,7 @@ class Network:
         if bottleneck_layer == len(self.architecture) - 2:
             self.add_layer()
         self.add_cell(bottleneck_layer)
-        self.layers[bottleneck_layer].cells[-1].set_kb(new_k, new_b)
-        self.debug_origin_k.append((np.array(new_k).tolist(), bottleneck_layer, self.architecture[bottleneck_layer + 1] - 1))
-        self.debug_origin_b.append((float(new_b), bottleneck_layer, self.architecture[bottleneck_layer + 1] - 1))
+        self.layers[bottleneck_layer].neurons[-1].set_kb(new_k, new_b)
         target = None
         next_layer = bottleneck_layer + 1
         while target is None:
@@ -258,8 +249,6 @@ class Network:
                 if target is None:
                     self.one_pass(next_layer)
                     next_layer += 1
-        #########################################################################################################
-        # DO NOT DEL THIS LINE: ws,bs = ...
         ws, bs = self.get_ws_bs()
         if self.mask is not None:
             ws_new, bs_new = Tn.train_next_layer(self.architecture, ws, bs, next_layer - 1,
@@ -267,19 +256,6 @@ class Network:
         else:
             ws_new, bs_new = Tn.train_next_layer(self.architecture, ws, bs, next_layer - 1,
                                                  adj_data, target, mask=self.mask)
-        while ws_new is None or bs_new is None:
-            # sphere_in_path = nz_relu_sphere(in_path[bottleneck_layer])
-            # sphere_path = nz_relu_sphere(path[bottleneck_layer])
-            # max_dis = np.max(np.matmul(sphere_in_path, np.array(sphere_path).T), 0)
-            # min_pos = np.argmin(max_dis)
-            # new_k = np.array([sphere_path[min_pos]]).T  # / np.sum(np.square(path[bottleneck_layer]))
-            # new_b = (np.matmul([sphere_path[min_pos]], new_k)[0, 0]
-            #          + np.max(np.matmul(sphere_in_path, new_k))) / (-2)
-            # self.layers[bottleneck_layer].cells[-1].k = new_k.tolist()
-            # self.layers[bottleneck_layer].cells[-1].b = new_b
-            # ws_new, bs_new = Tn.train_new_cell(self.architecture, ws, bs, bottleneck_layer,
-            #                                    [patterns_d[min_pos]], [labels_d[min_pos]], 0)
-            exit()
         self.set_ws_bs(ws_new, bs_new)
         append_list2, del_list2 = self.test(patterns_r, labels_r, ws_new, bs_new, label_shift=label_shift)
         last_len = len(self.in_memory_labels)
@@ -299,12 +275,11 @@ class Network:
         print("total trained:", len(self.in_memory_labels), "+", len(self.out_memory_labels))
         return
 
-    def training_sample(self, data_id, shift=False):
+    def training_sample(self, data_id=0, shift=False):
         temp_memory_data = self.out_memory_data
         temp_memory_labels = self.out_memory_labels
         self.out_memory_data = [temp_memory_data[0]]
         self.out_memory_labels = [temp_memory_labels[0]]
-        self.debug_trained_number = data_id
         patterns = self.out_memory_data
         labels = self.out_memory_labels
         self.out_memory_data = []
@@ -417,8 +392,8 @@ class Network:
             self.out_memory_labels = labels
             return False
 
+    # Class-Batch Training
     def training(self, data_id=0):
-        self.debug_trained_number = data_id
         acpt = self.try_fine_tuning()
         if acpt:
             return
@@ -434,7 +409,7 @@ class Network:
         json_layers = []
         for li in self.layers:
             json_cells = []
-            for ci in li.cells:
+            for ci in li.neurons:
                 if ci.b is not None:
                     tempb = ci.b
                 else:
@@ -454,11 +429,9 @@ class Network:
                           }
             json_layers += [json_layer]
         json_net = {"architecture": self.architecture, "layers": json_layers, "loop": self.loop,
-                    "debug_trained_number": self.debug_trained_number, "debug_add_cell_time": self.debug_add_cell_time,
                     "in_memory_data": self.in_memory_data, "in_memory_labels": self.in_memory_labels,
                     "out_memory_data": self.out_memory_data, "out_memory_labels": self.out_memory_labels,
-                    "debug_test_acc": self.debug_test_acc, "shift": self.shift, "mask": self.mask,
-                    "debug_origin_k": self.debug_origin_k, "debug_origin_b": self.debug_origin_b}
+                    "shift": self.shift, "mask": self.mask}
         json.dump(json_net, file)
         file.close()
         print("Net Saved.")
@@ -471,17 +444,12 @@ class Network:
         while len(self.architecture) < len(architecture):
             self.add_layer()
         for li in range(len(architecture) - 1):
-            while len(self.layers[li].cells) < architecture[li + 1]:
+            while len(self.layers[li].neurons) < architecture[li + 1]:
                 self.add_cell(li)
         print("architecture", self.architecture, architecture)
         self.shift = data["shift"]
         self.loop = data["loop"]
         self.mask = data["mask"]
-        # self.debug_origin_k = data["debug_origin_k"]
-        # self.debug_origin_b = data["debug_origin_b"]
-        # self.debug_trained_number = data["debug_trained_number"]
-        self.debug_add_cell_time = data["debug_add_cell_time"]
-        self.debug_test_acc = data["debug_test_acc"]
         self.in_memory_data = data["in_memory_data"]
         self.in_memory_labels = data["in_memory_labels"]
         self.out_memory_data = data["out_memory_data"]
@@ -493,7 +461,7 @@ class Network:
             li.ln = layer_data["ln"]
             li.pd = layer_data["pd"]
             cn = 0
-            for ci in li.cells:
+            for ci in li.neurons:
                 cell_data = cells_data[cn]
                 ci.k = cell_data["k"]
                 ci.b = cell_data["b"]
@@ -510,7 +478,7 @@ class Network:
         while len(self.architecture) < len(architecture):
             self.add_layer()
         for li in range(len(architecture) - 1):
-            while len(self.layers[li].cells) < architecture[li + 1]:
+            while len(self.layers[li].neurons) < architecture[li + 1]:
                 self.add_cell(li)
         print("architecture", self.architecture, architecture)
         self.in_memory_data = data["in_memory_data"]
@@ -519,21 +487,8 @@ class Network:
         self.out_memory_labels = data["out_memory_labels"]
         ln = 0
         for li in self.layers:
-            for ci in li.cells:
+            for ci in li.neurons:
                 ci.k = np.random.normal(0, 0.001, [self.architecture[ln], 1]).tolist()
                 ci.b = np.random.normal(0, 0.001)
             ln += 1
         file.close()
-
-    def debug_cos(self):
-        cos_list = []
-        for k in range(len(self.debug_origin_k)):
-            k_o = self.debug_origin_k[k][0]
-            ln = self.debug_origin_k[k][1]
-            cn = self.debug_origin_k[k][2]
-            k_n = self.layers[ln].cells[cn].k
-            for i in range(len(k_n) - len(k_o)):
-                k_o.append([0])
-            cosi = np.matmul(np.array(k_o).T, k_n) / (np.sqrt(np.sum(np.square(k_o))) * np.sqrt(np.sum(np.square(k_n))))
-            cos_list.append(np.sum(cosi))
-        print(cos_list)
